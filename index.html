@@ -1,1 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Tickets - Café 2025</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    body {
+      background-color: #f5f5f5;
+    }
+    .card {
+      border-radius: 1rem;
+      box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.1);
+    }
+    .navbar {
+      border-radius: 0 0 1rem 1rem;
+    }
+    .ticket-card {
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+  <div class="container-fluid">
+    <a class="navbar-brand mx-auto" href="#">Sistema de Tickets Café 2025</a>
+  </div>
+</nav>
+
+<div class="container" id="app">
+  <!-- Login Form -->
+  <div id="login-section" class="card p-4">
+    <h3 class="text-center">Iniciar Sesión</h3>
+    <input type="email" class="form-control my-2" id="email" placeholder="Correo electrónico">
+    <input type="password" class="form-control my-2" id="password" placeholder="Contraseña">
+    <button class="btn btn-primary w-100 my-2" onclick="login()">Iniciar sesión</button>
+    <p class="text-center">¿No tienes cuenta? <a href="#" onclick="toggleRegister(true)">Regístrate</a></p>
+  </div>
+
+  <!-- Register Form -->
+  <div id="register-section" class="card p-4 d-none">
+    <h3 class="text-center">Registro</h3>
+    <input type="email" class="form-control my-2" id="reg-email" placeholder="Correo electrónico">
+    <input type="password" class="form-control my-2" id="reg-password" placeholder="Contraseña">
+    <button class="btn btn-success w-100 my-2" onclick="register()">Registrarse</button>
+    <p class="text-center">¿Ya tienes cuenta? <a href="#" onclick="toggleRegister(false)">Iniciar sesión</a></p>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard" class="d-none">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4>Bienvenido, <span id="user-email"></span></h4>
+      <button class="btn btn-outline-danger" onclick="logout()">Cerrar sesión</button>
+    </div>
+
+    <button class="btn btn-success mb-3" onclick="showCreateForm()">
+      <i class="fas fa-plus"></i> Crear nuevo ticket
+    </button>
+
+    <!-- Ticket creation form -->
+    <div id="create-ticket-form" class="card p-3 d-none">
+      <h5>Nuevo Ticket</h5>
+      <input type="text" class="form-control mb-2" id="ticket-title" placeholder="Título">
+      <textarea class="form-control mb-2" id="ticket-desc" placeholder="Descripción"></textarea>
+      <select class="form-select mb-2" id="ticket-priority">
+        <option value="Alta">Alta</option>
+        <option value="Media">Media</option>
+        <option value="Baja">Baja</option>
+      </select>
+      <input type="text" class="form-control mb-2" id="ticket-type" placeholder="Tipo de pedido">
+      <button class="btn btn-primary" onclick="createTicket()">Guardar Ticket</button>
+    </div>
+
+    <!-- Tickets list -->
+    <div id="tickets-list" class="mt-4"></div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+  import { getFirestore, collection, addDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCDx496WCv2ChVDacIkaA_xg70Hhpr-FpI",
+    authDomain: "p-tickets-d8014.firebaseapp.com",
+    projectId: "p-tickets-d8014",
+    storageBucket: "p-tickets-d8014.firebasestorage.app",
+    messagingSenderId: "114514664464",
+    appId: "1:114514664464:web:a9718d6bc634e1d58dbe95"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth();
+  const db = getFirestore();
+
+  const loginSection = document.getElementById("login-section");
+  const registerSection = document.getElementById("register-section");
+  const dashboard = document.getElementById("dashboard");
+  const emailInput = document.getElementById("email");
+  const passwordInput = document.getElementById("password");
+  const regEmail = document.getElementById("reg-email");
+  const regPassword = document.getElementById("reg-password");
+  const userEmail = document.getElementById("user-email");
+
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      userEmail.textContent = user.email;
+      loginSection.classList.add("d-none");
+      registerSection.classList.add("d-none");
+      dashboard.classList.remove("d-none");
+      loadTickets();
+    } else {
+      loginSection.classList.remove("d-none");
+      registerSection.classList.add("d-none");
+      dashboard.classList.add("d-none");
+    }
+  });
+
+  window.toggleRegister = (show) => {
+    registerSection.classList.toggle("d-none", !show);
+    loginSection.classList.toggle("d-none", show);
+  }
+
+  window.login = () => {
+    signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value)
+      .catch(err => Swal.fire("Error", err.message, "error"));
+  }
+
+  window.register = () => {
+    createUserWithEmailAndPassword(auth, regEmail.value, regPassword.value)
+      .catch(err => Swal.fire("Error", err.message, "error"));
+  }
+
+  window.logout = () => signOut(auth);
+
+  window.showCreateForm = () => {
+    document.getElementById("create-ticket-form").classList.toggle("d-none");
+  }
+
+  window.createTicket = async () => {
+    const title = document.getElementById("ticket-title").value;
+    const desc = document.getElementById("ticket-desc").value;
+    const priority = document.getElementById("ticket-priority").value;
+    const type = document.getElementById("ticket-type").value;
+
+    try {
+      await addDoc(collection(db, "tickets"), {
+        title,
+        desc,
+        priority,
+        type,
+        date: new Date().toLocaleString(),
+        user: auth.currentUser.email
+      });
+      Swal.fire("Éxito", "Ticket creado correctamente", "success");
+      loadTickets();
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    }
+  }
+
+  async function loadTickets() {
+    const list = document.getElementById("tickets-list");
+    list.innerHTML = "";
+    const q = query(collection(db, "tickets"), where("user", "==", auth.currentUser.email));
+    const querySnapshot = await getDocs(q);
+    querySnapshot.forEach(doc => {
+      const data = doc.data();
+      list.innerHTML += `
+        <div class="card ticket-card">
+          <div class="card-body">
+            <h5 class="card-title">${data.title}</h5>
+            <p class="card-text">${data.desc}</p>
+            <span class="badge bg-${data.priority === 'Alta' ? 'danger' : data.priority === 'Media' ? 'warning' : 'success'}">${data.priority}</span>
+            <p class="mb-0"><small>${data.type} - ${data.date}</small></p>
+          </div>
+        </div>
+      `;
+    });
+  }
+</script>
+
+</body>
+</html>
 
